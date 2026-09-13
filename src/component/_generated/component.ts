@@ -27,7 +27,12 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       checkAndRecordEvent: FunctionReference<
         "mutation",
         "internal",
-        { action?: string; eventId: string; eventType: string; payload: string },
+        {
+          action?: string;
+          eventId: string;
+          eventType: string;
+          payload: string;
+        },
         { alreadyProcessed: boolean },
         Name
       >;
@@ -38,6 +43,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         null | {
           _creationTime: number;
           _id: string;
+          archivedAt?: number;
           assigneeId?: string;
           assigneeName?: string;
           createdAt: number;
@@ -49,8 +55,21 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           state: string;
           teamId: string;
           title: string;
+          trashed?: boolean;
           updatedAt: number;
           url: string;
+        },
+        Name
+      >;
+      getStats: FunctionReference<
+        "query",
+        "internal",
+        {},
+        {
+          archivedCount: number;
+          commentCount: number;
+          issueCount: number;
+          webhookEventCount: number;
         },
         Name
       >;
@@ -78,6 +97,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         Array<{
           _creationTime: number;
           _id: string;
+          archivedAt?: number;
           assigneeId?: string;
           assigneeName?: string;
           createdAt: number;
@@ -89,15 +109,79 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           state: string;
           teamId: string;
           title: string;
+          trashed?: boolean;
           updatedAt: number;
           url: string;
+        }>,
+        Name
+      >;
+      listRecentComments: FunctionReference<
+        "query",
+        "internal",
+        { limit?: number },
+        Array<{
+          _creationTime: number;
+          _id: string;
+          body: string;
+          commentId: string;
+          createdAt: number;
+          issueId: string;
+          updatedAt: number;
+          userId?: string;
+          userName?: string;
+        }>,
+        Name
+      >;
+      listRecentIssues: FunctionReference<
+        "query",
+        "internal",
+        { limit?: number },
+        Array<{
+          _creationTime: number;
+          _id: string;
+          archivedAt?: number;
+          assigneeId?: string;
+          assigneeName?: string;
+          createdAt: number;
+          description?: string;
+          identifier: string;
+          issueId: string;
+          labels?: Array<string>;
+          priority?: number;
+          state: string;
+          teamId: string;
+          title: string;
+          trashed?: boolean;
+          updatedAt: number;
+          url: string;
+        }>,
+        Name
+      >;
+      listRecentWebhookEvents: FunctionReference<
+        "query",
+        "internal",
+        { limit?: number },
+        Array<{
+          _creationTime: number;
+          _id: string;
+          action?: string;
+          eventId: string;
+          eventType: string;
+          payload: string;
+          receivedAt: number;
         }>,
         Name
       >;
       recordComment: FunctionReference<
         "mutation",
         "internal",
-        { body: string; commentId: string; issueId: string; userId?: string; userName?: string },
+        {
+          body: string;
+          commentId: string;
+          issueId: string;
+          userId?: string;
+          userName?: string;
+        },
         string,
         Name
       >;
@@ -105,6 +189,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         "mutation",
         "internal",
         {
+          archivedAt?: number;
           assigneeId?: string;
           assigneeName?: string;
           description?: string;
@@ -115,6 +200,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           state: string;
           teamId: string;
           title: string;
+          trashed?: boolean;
           url: string;
         },
         string,
@@ -124,6 +210,13 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         "mutation",
         "internal",
         { issueId: string },
+        null,
+        Name
+      >;
+      setIssueArchived: FunctionReference<
+        "mutation",
+        "internal",
+        { archivedAt: number | null; issueId: string },
         null,
         Name
       >;
