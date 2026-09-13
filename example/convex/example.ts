@@ -53,6 +53,14 @@ export const archiveIssue = action({
   },
 });
 
+export const unarchiveIssue = action({
+  args: { issueId: v.string() },
+  handler: async (ctx, args) => {
+    await linear.unarchiveIssue(ctx, args);
+    return null;
+  },
+});
+
 export const getIssue = query({
   args: { issueId: v.string() },
   handler: async (ctx, args) => {
@@ -71,5 +79,61 @@ export const listCommentsByIssue = query({
   args: { issueId: v.string(), limit: v.optional(v.number()) },
   handler: async (ctx, args) => {
     return await linear.listCommentsByIssue(ctx, args);
+  },
+});
+
+// Demo-only convenience: lists the workspace's teams (id + name) so the UI
+// can offer a picker instead of asking you to paste a raw team UUID. Not
+// part of the component's own public API — it's a thin, ad-hoc GraphQL call
+// scoped to this example app.
+export const listTeams = action({
+  args: {},
+  handler: async () => {
+    const res = await fetch("https://api.linear.app/graphql", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: process.env.LINEAR_API_KEY!,
+      },
+      body: JSON.stringify({
+        query: `query { teams { nodes { id name key } } }`,
+      }),
+    });
+    const json = (await res.json()) as {
+      data?: { teams: { nodes: Array<{ id: string; name: string; key: string }> } };
+      errors?: Array<{ message: string }>;
+    };
+    if (!res.ok || json.errors) {
+      throw new Error(json.errors?.map((e) => e.message).join("; ") ?? res.statusText);
+    }
+    return json.data!.teams.nodes;
+  },
+});
+
+export const getStats = query({
+  args: {},
+  handler: async (ctx) => {
+    return await linear.getStats(ctx);
+  },
+});
+
+export const listRecentIssues = query({
+  args: { limit: v.optional(v.number()) },
+  handler: async (ctx, args) => {
+    return await linear.listRecentIssues(ctx, args);
+  },
+});
+
+export const listRecentComments = query({
+  args: { limit: v.optional(v.number()) },
+  handler: async (ctx, args) => {
+    return await linear.listRecentComments(ctx, args);
+  },
+});
+
+export const listRecentWebhookEvents = query({
+  args: { limit: v.optional(v.number()) },
+  handler: async (ctx, args) => {
+    return await linear.listRecentWebhookEvents(ctx, args);
   },
 });

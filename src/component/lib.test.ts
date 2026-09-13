@@ -64,7 +64,7 @@ describe("issues", () => {
       issueId: "issue_gone",
       identifier: "ENG-3",
       teamId: "team_eng",
-      title: "Will be archived",
+      title: "Will be removed",
       state: "Todo",
       url: "https://linear.app/acme/issue/ENG-3",
     });
@@ -74,6 +74,73 @@ describe("issues", () => {
     await t.mutation(api.lib.removeIssue, { issueId: "issue_gone" });
 
     expect(await t.query(api.lib.getIssue, { issueId: "issue_gone" })).toBeNull();
+  });
+
+  test("setIssueArchived marks the issue archived without deleting it", async () => {
+    const t = initConvexTest();
+
+    await t.mutation(api.lib.recordIssue, {
+      issueId: "issue_archive",
+      identifier: "ENG-4",
+      teamId: "team_eng",
+      title: "Will be archived",
+      state: "Done",
+      url: "https://linear.app/acme/issue/ENG-4",
+    });
+
+    let issue = await t.query(api.lib.getIssue, { issueId: "issue_archive" });
+    expect(issue?.archivedAt).toBeUndefined();
+
+    await t.mutation(api.lib.setIssueArchived, { issueId: "issue_archive", archivedAt: 1_700_000_000_000 });
+
+    issue = await t.query(api.lib.getIssue, { issueId: "issue_archive" });
+    expect(issue).not.toBeNull();
+    expect(issue?.archivedAt).toBe(1_700_000_000_000);
+
+    // Unarchiving clears archivedAt but still doesn't delete the row.
+    await t.mutation(api.lib.setIssueArchived, { issueId: "issue_archive", archivedAt: null });
+
+    issue = await t.query(api.lib.getIssue, { issueId: "issue_archive" });
+    expect(issue).not.toBeNull();
+    expect(issue?.archivedAt).toBeUndefined();
+  });
+
+  test("setIssueArchived is a no-op for an unknown issueId", async () => {
+    const t = initConvexTest();
+
+    await expect(
+      t.mutation(api.lib.setIssueArchived, { issueId: "does_not_exist", archivedAt: Date.now() }),
+    ).resolves.toBeNull();
+  });
+
+  test("recordIssue carries the trashed flag through re-records", async () => {
+    const t = initConvexTest();
+
+    await t.mutation(api.lib.recordIssue, {
+      issueId: "issue_trash",
+      identifier: "ENG-5",
+      teamId: "team_eng",
+      title: "Moved to trash",
+      state: "Backlog",
+      url: "https://linear.app/acme/issue/ENG-5",
+      trashed: true,
+    });
+
+    let issue = await t.query(api.lib.getIssue, { issueId: "issue_trash" });
+    expect(issue?.trashed).toBe(true);
+
+    // A later re-fetch that finds the issue no longer trashed clears the flag.
+    await t.mutation(api.lib.recordIssue, {
+      issueId: "issue_trash",
+      identifier: "ENG-5",
+      teamId: "team_eng",
+      title: "Moved to trash",
+      state: "Backlog",
+      url: "https://linear.app/acme/issue/ENG-5",
+    });
+
+    issue = await t.query(api.lib.getIssue, { issueId: "issue_trash" });
+    expect(issue?.trashed).toBeUndefined();
   });
 });
 

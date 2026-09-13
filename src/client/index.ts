@@ -37,6 +37,11 @@ type IssueFragment = {
   description?: string | null;
   priority?: number | null;
   url: string;
+  // ISO timestamp when Linear archived this issue, or null/absent when active.
+  archivedAt?: string | null;
+  // Whether the issue is in Linear's 30-day trash — distinct from archivedAt
+  // (see the long comment on fetchIssueOrNull below for why both matter).
+  trashed?: boolean | null;
   state?: { name: string } | null;
   team?: { id: string } | null;
   assignee?: { id: string; name: string } | null;
@@ -80,6 +85,8 @@ function issueRecordFromFragment(issue: IssueFragment) {
     assigneeName: issue.assignee?.name,
     labels: issue.labels?.nodes.map((l) => l.name),
     url: issue.url,
+    archivedAt: issue.archivedAt ? new Date(issue.archivedAt).getTime() : undefined,
+    trashed: issue.trashed ?? undefined,
   };
 }
 
@@ -90,11 +97,51 @@ const ISSUE_FRAGMENT = `
   description
   priority
   url
+  archivedAt
+  trashed
   state { name }
   team { id }
   assignee { id name }
   labels { nodes { name } }
 `;
+
+// Linear's webhook `action` field for Issue events turns out NOT to reliably
+// distinguish archived / trashed / permanently-deleted:
+//   - issueArchive (soft, restorable)         -> webhook action "remove"
+//   - issueUnarchive (restore from archive)    -> webhook action "restore"
+//   - moving an issue to the 30-day trash      -> webhook action "update"
+// (confirmed by live testing against Linear's real API — not documented
+// this precisely anywhere). None of these deliveries include archivedAt or
+// trashed on their own `data` payload either. So instead of branching on
+// `action`, every Issue webhook re-fetches the issue's current state
+// straight from Linear's API and mirrors that — the payload's `action` is
+// still recorded on the webhookEvents row for auditing, but the *only*
+// thing that decides a hard local delete is the issue genuinely no longer
+// existing when re-fetched (a real "Entity not found" from the API, e.g.
+// after the 30-day trash window elapses).
+async function fetchIssueOrNull(apiKey: string, issueId: string): Promise<IssueFragment | null> {
+  const res = await fetch(LINEAR_API_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: apiKey,
+    },
+    body: JSON.stringify({
+      query: `query($id: String!) { issue(id: $id) { ${ISSUE_FRAGMENT} } }`,
+      variables: { id: issueId },
+    }),
+  });
+  const json = (await res.json()) as {
+    data?: { issue: IssueFragment | null };
+    errors?: Array<{ message: string }>;
+  };
+  if (json.errors) {
+    const notFound = json.errors.some((e) => /not found/i.test(e.message));
+    if (notFound) return null;
+    throw new Error(`Linear API error: ${json.errors.map((e) => e.message).join("; ")}`);
+  }
+  return json.data?.issue ?? null;
+}
 
 export class Linear {
   webhookHandler: ReturnType<typeof httpActionGeneric>;
@@ -105,6 +152,7 @@ export class Linear {
   ) {
     const component_ = component;
     const webhookSecret = options.webhookSecret;
+    const apiKey = options.apiKey;
 
     this.webhookHandler = httpActionGeneric(async (ctx, request) => {
       const rawBody = await request.text();
@@ -158,27 +206,14 @@ export class Linear {
       const data = payload.data as Record<string, unknown> | undefined;
 
       if (eventType === "Issue" && data) {
-        if (action === "remove") {
+        // See the comment on fetchIssueOrNull above: `action` alone can't
+        // tell us whether this issue is still active, archived, trashed, or
+        // truly gone, so every delivery re-fetches ground truth instead.
+        const fresh = await fetchIssueOrNull(apiKey, String(data.id));
+        if (fresh === null) {
           await ctx.runMutation(component_.lib.removeIssue, { issueId: String(data.id) });
         } else {
-          const team = data.team as Record<string, unknown> | undefined;
-          const state = data.state as Record<string, unknown> | undefined;
-          const assignee = data.assignee as Record<string, unknown> | undefined;
-          const labels = data.labels as Array<Record<string, unknown>> | undefined;
-
-          await ctx.runMutation(component_.lib.recordIssue, {
-            issueId: String(data.id),
-            identifier: String(data.identifier ?? ""),
-            teamId: (team?.id as string) ?? String(data.teamId ?? ""),
-            title: (data.title as string) ?? "",
-            description: (data.description as string) ?? undefined,
-            state: (state?.name as string) ?? "Unknown",
-            priority: (data.priority as number) ?? undefined,
-            assigneeId: (assignee?.id as string) ?? undefined,
-            assigneeName: (assignee?.name as string) ?? undefined,
-            labels: Array.isArray(labels) ? labels.map((l) => l.name as string) : undefined,
-            url: (data.url as string) ?? "",
-          });
+          await ctx.runMutation(component_.lib.recordIssue, issueRecordFromFragment(fresh));
         }
       } else if (eventType === "Comment" && data) {
         if (action !== "remove") {
@@ -359,7 +394,36 @@ export class Linear {
       throw new Error("Linear API error: issueArchive did not succeed");
     }
 
-    await ctx.runMutation(this.component.lib.removeIssue, { issueId: args.issueId });
+    // Linear archives (soft-hides, restorable), it doesn't delete — mirror
+    // that locally instead of dropping the row, so a re-fetch or webhook
+    // replay never has to guess whether the issue still exists.
+    await ctx.runMutation(this.component.lib.setIssueArchived, {
+      issueId: args.issueId,
+      archivedAt: Date.now(),
+    });
+  }
+
+  async unarchiveIssue(
+    ctx: GenericActionCtx<GenericDataModel>,
+    args: { issueId: string },
+  ): Promise<void> {
+    const data = await this.graphql<{ issueUnarchive: { success: boolean } }>(
+      `mutation IssueUnarchive($id: String!) {
+        issueUnarchive(id: $id) {
+          success
+        }
+      }`,
+      { id: args.issueId },
+    );
+
+    if (!data.issueUnarchive.success) {
+      throw new Error("Linear API error: issueUnarchive did not succeed");
+    }
+
+    await ctx.runMutation(this.component.lib.setIssueArchived, {
+      issueId: args.issueId,
+      archivedAt: null,
+    });
   }
 
   async getIssue(ctx: RunQueryCtx, args: { issueId: string }) {
@@ -372,6 +436,22 @@ export class Linear {
 
   async listCommentsByIssue(ctx: RunQueryCtx, args: { issueId: string; limit?: number }) {
     return await ctx.runQuery(this.component.lib.listCommentsByIssue, args);
+  }
+
+  async getStats(ctx: RunQueryCtx) {
+    return await ctx.runQuery(this.component.lib.getStats, {});
+  }
+
+  async listRecentIssues(ctx: RunQueryCtx, args: { limit?: number } = {}) {
+    return await ctx.runQuery(this.component.lib.listRecentIssues, args);
+  }
+
+  async listRecentComments(ctx: RunQueryCtx, args: { limit?: number } = {}) {
+    return await ctx.runQuery(this.component.lib.listRecentComments, args);
+  }
+
+  async listRecentWebhookEvents(ctx: RunQueryCtx, args: { limit?: number } = {}) {
+    return await ctx.runQuery(this.component.lib.listRecentWebhookEvents, args);
   }
 }
 
