@@ -13,3 +13,9 @@ node_modules
 # npm pack output
 *.tgz
 *.tsbuildinfo
+
+# Convex CLI's auto-generated agent-onboarding files (from `npx convex
+# dev`) — kept out so the repo carries no footprint of which coding
+# agent worked on it.
+/CLAUDE.md
+/AGENTS.md
