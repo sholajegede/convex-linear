@@ -7,6 +7,8 @@ Sync Linear issues and comments into your Convex database reactively, and create
 [![npm downloads](https://img.shields.io/npm/dw/convex-linear)](https://www.npmjs.com/package/convex-linear)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](./LICENSE)
 
+![convex-linear demo](./demo.png)
+
 ```ts
 const linear = new Linear(components.convexLinear, {
   apiKey: process.env.LINEAR_API_KEY!,
