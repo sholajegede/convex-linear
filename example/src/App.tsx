@@ -1,88 +1,52 @@
 import { useState } from "react";
-import { useAction, useQuery } from "convex/react";
-import { api } from "../convex/_generated/api";
-import "./App.css";
+import { Header } from "./components/Header";
+import { Overview } from "./components/Overview";
+import type { Tab } from "./components/Header";
+import { TopBanner } from "./components/TopBanner";
+import { IssuesPanel } from "./components/IssuesPanel";
+import { WebhooksPanel } from "./components/WebhooksPanel";
+import { History } from "./components/History";
+import { Console } from "./components/Console";
+import "./theme.css";
 
 export default function App() {
+  const [tab, setTab] = useState<Tab>("overview");
+  const [teamIds, setTeamIds] = useState<string[]>([]);
   const [teamId, setTeamId] = useState("");
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [createdUrl, setCreatedUrl] = useState<string | null>(null);
+  // A fresh nonce forces IssuesPanel to remount (and pick up a new initial
+  // title) whenever a follow-up is filed, without syncing props into state.
+  const [followUp, setFollowUp] = useState<{ title: string; nonce: number } | null>(null);
 
-  const createIssue = useAction(api.example.createIssue);
-  const issues = useQuery(
-    api.example.listIssuesByTeam,
-    teamId ? { teamId } : "skip",
-  );
+  function addTeam(id: string) {
+    setTeamIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
+    setTeamId(id);
+  }
 
-  async function submit() {
-    const result = await createIssue({
-      teamId,
-      title,
-      description: description || undefined,
-    });
-    setCreatedUrl(result.url);
-    setTitle("");
-    setDescription("");
+  function fileFollowUp(title: string) {
+    setFollowUp({ title, nonce: Date.now() });
+    setTab("issues");
   }
 
   return (
-    <main className="app">
-      <h1>convex-linear</h1>
-      <p>
-        Sync Linear issues into Convex reactively, and create, update, and
-        comment on issues from Convex functions.
-      </p>
-
-      <label>
-        Team ID
-        <input
-          value={teamId}
-          onChange={(e) => setTeamId(e.target.value)}
-          placeholder="team_..."
+    <div className="shell">
+      <div className="main">
+        <Header
+          tab={tab}
+          onTab={setTab}
+          teamId={teamId}
+          teamIds={teamIds}
+          onSelectTeam={setTeamId}
+          onAddTeam={addTeam}
         />
-      </label>
-
-      <label>
-        Title
-        <input
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          placeholder="Ship the launch checklist"
-        />
-      </label>
-
-      <label>
-        Description
-        <textarea
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          placeholder="Optional details..."
-        />
-      </label>
-
-      <button onClick={submit} disabled={!teamId || !title}>
-        Create issue
-      </button>
-
-      {createdUrl && (
-        <p>
-          Created:{" "}
-          <a href={createdUrl} target="_blank" rel="noreferrer">
-            {createdUrl}
-          </a>
-        </p>
-      )}
-
-      {issues && issues.length > 0 && (
-        <ul>
-          {issues.map((issue) => (
-            <li key={issue._id}>
-              {issue.identifier} {issue.title} — <strong>{issue.state}</strong>
-            </li>
-          ))}
-        </ul>
-      )}
-    </main>
+        <TopBanner />
+        {tab === "overview" && <Overview />}
+        {tab === "issues" && (
+          <IssuesPanel key={followUp?.nonce ?? "default"} teamId={teamId} prefillTitle={followUp?.title} />
+        )}
+        {tab === "webhooks" && <WebhooksPanel />}
+        {tab === "history" && <History onFileFollowUp={fileFollowUp} />}
+      </div>
+      <Console />
+    </div>
   );
 }
