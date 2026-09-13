@@ -2,7 +2,28 @@
 
 Sync Linear issues and comments into your Convex database reactively, and create, update, comment on, and archive issues directly from Convex functions.
 
-[![npm version](https://badge.fury.io/js/convex-linear.svg)](https://badge.fury.io/js/convex-linear)
+[![npm version](https://img.shields.io/npm/v/convex-linear)](https://www.npmjs.com/package/convex-linear)
+[![Convex Component](https://www.convex.dev/components/badge/sholajegede/convex-linear)](https://www.convex.dev/components/sholajegede/convex-linear)
+[![npm downloads](https://img.shields.io/npm/dw/convex-linear)](https://www.npmjs.com/package/convex-linear)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](./LICENSE)
+
+```ts
+const linear = new Linear(components.convexLinear, {
+  apiKey: process.env.LINEAR_API_KEY!,
+  webhookSecret: process.env.LINEAR_WEBHOOK_SECRET!,
+});
+
+// File an issue and get it back immediately — no waiting on the webhook
+const { identifier, url } = await linear.createIssue(ctx, {
+  teamId: "team_...",
+  title: "Ship the launch checklist",
+});
+
+// Every issue for that team stays live from here on, updated the
+// instant something changes in Linear — including edits made outside
+// your app, like someone archiving it from Linear's own UI
+const issues = useQuery(api.example.listIssuesByTeam, { teamId: "team_..." });
+```
 
 <!-- START: Include on https://convex.dev/components -->
 
