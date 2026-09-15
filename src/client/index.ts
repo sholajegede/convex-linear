@@ -261,7 +261,7 @@ export class Linear {
   }
 
   async createIssue(
-    ctx: GenericActionCtx<GenericDataModel>,
+    ctx: RunMutationCtx,
     args: CreateIssueArgs,
   ): Promise<{ identifier: string; url: string }> {
     const data = await this.graphql<{
@@ -296,7 +296,7 @@ export class Linear {
   }
 
   async updateIssue(
-    ctx: GenericActionCtx<GenericDataModel>,
+    ctx: RunMutationCtx,
     args: UpdateIssueArgs,
   ): Promise<void> {
     const { issueId, ...rest } = args;
@@ -333,7 +333,7 @@ export class Linear {
   }
 
   async createComment(
-    ctx: GenericActionCtx<GenericDataModel>,
+    ctx: RunMutationCtx,
     args: { issueId: string; body: string },
   ): Promise<{ id: string }> {
     const data = await this.graphql<{
@@ -378,7 +378,7 @@ export class Linear {
   }
 
   async archiveIssue(
-    ctx: GenericActionCtx<GenericDataModel>,
+    ctx: RunMutationCtx,
     args: { issueId: string },
   ): Promise<void> {
     const data = await this.graphql<{ issueArchive: { success: boolean } }>(
@@ -404,7 +404,7 @@ export class Linear {
   }
 
   async unarchiveIssue(
-    ctx: GenericActionCtx<GenericDataModel>,
+    ctx: RunMutationCtx,
     args: { issueId: string },
   ): Promise<void> {
     const data = await this.graphql<{ issueUnarchive: { success: boolean } }>(
@@ -457,4 +457,14 @@ export class Linear {
 
 type RunQueryCtx = {
   runQuery: GenericActionCtx<GenericDataModel>["runQuery"];
+};
+
+// createIssue, updateIssue, createComment, archiveIssue, and unarchiveIssue
+// only ever call ctx.runMutation. Typing them against this minimal
+// structural type instead of the full GenericActionCtx<GenericDataModel>
+// means they accept any real app's ActionCtx, whose DataModel is a concrete
+// set of tables (not assignable to the generic GenericDataModel once an app
+// defines any tables of its own).
+type RunMutationCtx = {
+  runMutation: GenericActionCtx<GenericDataModel>["runMutation"];
 };
