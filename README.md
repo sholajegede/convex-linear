@@ -3,7 +3,7 @@
 Sync Linear issues and comments into your Convex database reactively, and create, update, comment on, and archive issues directly from Convex functions.
 
 [![npm version](https://img.shields.io/npm/v/convex-linear)](https://www.npmjs.com/package/convex-linear)
-[![Convex Component](https://www.convex.dev/components/badge/sholajegede/convex-linear)](https://www.convex.dev/components/convex-linear)
+[![Convex Component](https://www.convex.dev/components/badge/convex-linear)](https://www.convex.dev/components/convex-linear)
 [![npm downloads](https://img.shields.io/npm/dw/convex-linear)](https://www.npmjs.com/package/convex-linear)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](./LICENSE)
 
