@@ -29,3 +29,4 @@ node_modules
 /.agents/
 /skills-lock.json
 /example/convex/_generated/ai/
+.vercel
